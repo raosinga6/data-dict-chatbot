@@ -1,0 +1,39 @@
+substitutions:
+  _AR_HOST: asia-southeast1-docker.pkg.dev
+  _REPO: data-dict-chatbot
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_MEDIUM
+
+timeout: 600s
+
+steps:
+
+  - name: python:3.11-slim
+    id: run-tests
+    entrypoint: bash
+    args: [scripts/run_tests.sh]
+    env:
+      - DATABASE_URL=sqlite+aiosqlite:///./test.db
+      - ENVIRONMENT=test
+      - OPENAI_API_KEY=sk-test-fake
+
+  - name: gcr.io/cloud-builders/docker
+    id: build-image
+    waitFor: [run-tests]
+    args:
+      - build
+      - --file=backend/Dockerfile
+      - --tag=$_AR_HOST/$PROJECT_ID/$_REPO/app:$SHORT_SHA
+      - --tag=$_AR_HOST/$PROJECT_ID/$_REPO/app:latest
+      - --cache-from=$_AR_HOST/$PROJECT_ID/$_REPO/app:latest
+      - backend/
+
+  - name: gcr.io/cloud-builders/docker
+    id: push-image
+    waitFor: [build-image]
+    args:
+      - push
+      - --all-tags
+      - $_AR_HOST/$PROJECT_ID/$_REPO/app
