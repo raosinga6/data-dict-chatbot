@@ -185,3 +185,57 @@ INSERT INTO dd_joins (from_schema, from_table, from_column, to_schema, to_table,
 ('finance','invoices',  'customer_id', 'sales','customers',  'customer_id', 'INNER', 'Invoices to customer'),
 ('finance','invoices',  'order_id',    'sales','orders',     'order_id',    'LEFT',  'Invoices to originating order')
 ON CONFLICT DO NOTHING;
+
+-- ── Actual business tables for local testing ─────────────────────
+CREATE TABLE IF NOT EXISTS sales.regions (
+    region_id   SERIAL PRIMARY KEY,
+    region_name VARCHAR(100),
+    country     VARCHAR(100),
+    manager_id  UUID
+);
+
+CREATE TABLE IF NOT EXISTS sales.customers (
+    customer_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    first_name     VARCHAR(100),
+    last_name      VARCHAR(100),
+    email          VARCHAR(200),
+    region_id      INTEGER REFERENCES sales.regions(region_id),
+    created_at     TIMESTAMP DEFAULT NOW(),
+    lifetime_value NUMERIC(12,2)
+);
+
+CREATE TABLE IF NOT EXISTS sales.orders (
+    order_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id  UUID REFERENCES sales.customers(customer_id),
+    region_id    INTEGER REFERENCES sales.regions(region_id),
+    order_date   TIMESTAMP DEFAULT NOW(),
+    status       VARCHAR(50) DEFAULT 'pending',
+    total_amount NUMERIC(12,2)
+);
+
+-- Sample data
+INSERT INTO sales.regions (region_name, country) VALUES
+('North Asia',    'Singapore'),
+('South Asia',    'India'),
+('ANZ',           'Australia'),
+('North America', 'USA'),
+('Europe',        'UK')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO sales.customers (first_name, last_name, email, region_id, lifetime_value) VALUES
+('Arun',    'Kumar',   'arun@example.com',   1, 15000.00),
+('Priya',   'Sharma',  'priya@example.com',  2, 8500.00),
+('James',   'Wilson',  'james@example.com',  3, 22000.00),
+('Sarah',   'Chen',    'sarah@example.com',  4, 31000.00),
+('Michael', 'Brown',   'mike@example.com',   5, 12000.00)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO sales.orders (customer_id, region_id, order_date, status, total_amount)
+SELECT
+    c.customer_id,
+    c.region_id,
+    NOW() - (random() * interval '365 days'),
+    (ARRAY['pending','shipped','delivered'])[floor(random()*3+1)],
+    round((random() * 5000 + 500)::numeric, 2)
+FROM sales.customers c, generate_series(1,5)
+ON CONFLICT DO NOTHING;
