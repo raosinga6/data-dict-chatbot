@@ -1,0 +1,13 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 300s
+
+steps:
+  - name: python:3.11-slim
+    entrypoint: bash
+    args: [scripts/run_tests.sh]
+    env:
+      - DATABASE_URL=sqlite+aiosqlite:///./test.db
+      - ENVIRONMENT=test
+      - OPENAI_API_KEY=sk-test-fake

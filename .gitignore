@@ -1,0 +1,42 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+
+# Docker volumes (local dev data)
+postgres_data/
+chroma_data/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Test artefacts
+test-results.xml
+.coverage
+htmlcov/
+
+# GCP / Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+service-account-key.json
