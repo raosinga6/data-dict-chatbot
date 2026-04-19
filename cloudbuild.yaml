@@ -1,6 +1,7 @@
 substitutions:
   _AR_HOST: asia-southeast1-docker.pkg.dev
   _REPO: data-dict-chatbot
+  _DB_SECRET: dd-database-url          # Secret Manager secret name
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -10,8 +11,9 @@ timeout: 600s
 
 steps:
 
+  # 1. Unit tests — SQLite is fine here, no real DB needed
   - name: python:3.11-slim
-    id: run-tests
+    id: run-unit-tests
     entrypoint: bash
     args: [scripts/run_tests.sh]
     env:
@@ -19,9 +21,10 @@ steps:
       - ENVIRONMENT=test
       - OPENAI_API_KEY=sk-test-fake
 
+  # 2. Build image
   - name: gcr.io/cloud-builders/docker
     id: build-image
-    waitFor: [run-tests]
+    waitFor: [run-unit-tests]
     args:
       - build
       - --file=backend/Dockerfile
@@ -30,6 +33,7 @@ steps:
       - --cache-from=$_AR_HOST/$PROJECT_ID/$_REPO/app:latest
       - backend/
 
+  # 3. Push image
   - name: gcr.io/cloud-builders/docker
     id: push-image
     waitFor: [build-image]
@@ -37,3 +41,28 @@ steps:
       - push
       - --all-tags
       - $_AR_HOST/$PROJECT_ID/$_REPO/app
+
+  # 4. Run Alembic migrations against real Cloud SQL
+  #    Uses Cloud SQL Auth Proxy — the correct way to reach Cloud SQL from Cloud Build
+  - name: gcr.io/cloud-builders/gcloud
+    id: run-migrations
+    waitFor: [push-image]
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        # Fetch real DB URL from Secret Manager
+        export DATABASE_URL=$$(gcloud secrets versions access latest --secret=$_DB_SECRET)
+
+        # Start Cloud SQL Auth Proxy in background
+        wget -q https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.1/cloud-sql-proxy.linux.amd64 \
+          -O /cloud-sql-proxy && chmod +x /cloud-sql-proxy
+        /cloud-sql-proxy $${CLOUD_SQL_INSTANCE} --port=5432 &
+        sleep 3
+
+        # Run migrations
+        cd backend
+        pip install -r requirements.txt -q
+        alembic upgrade head
+    env:
+      - ENVIRONMENT=production

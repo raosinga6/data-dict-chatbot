@@ -55,7 +55,8 @@ services:
     restart: on-failure
     
     environment:
-      DATABASE_URL: postgresql+asyncpg://dduser:${POSTGRES_PASSWORD}@postgres:5432/datadict
+      DATABASE_URL: postgresql+asyncpg://dduser:changeme_local_dev@postgres:5432/datadict
+      API_BASE_URL: http://backend:8000/api/v1
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
       REDIS_URL: redis://redis:6379
