@@ -5,6 +5,7 @@ from pathlib import Path
 # backend/app/config.py is 3 levels below repo root:
 # data-dict-chatbot/backend/app/config.py → parents[2] = data-dict-chatbot/
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # backend/app/ → backend/ → data-dict-chatbot/
 
 
 class Settings(BaseSettings):
@@ -47,13 +48,11 @@ class Settings(BaseSettings):
     api_base_url: str = "http://backend:8000/api/v1" 
     
 
-    model_config = {
-        "env_file": str(_REPO_ROOT / ".env"),
-        "env_file_encoding": "utf-8",
-        "case_sensitive": False,
-        "extra": "ignore",
-    }
-
+    model_config = SettingsConfigDict(
+        env_file=BASE_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",          # silently ignore unknown env vars
+    )
 
 @lru_cache()
 def get_settings() -> Settings:

@@ -4,6 +4,7 @@ import uuid
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.rag.retriever import retrieve
 
 from app.models.db import get_db
 from app.models.schemas import (
@@ -54,6 +55,12 @@ async def chat_endpoint(
 ) -> ChatResponse:
     start = time.perf_counter()
     background_tasks.add_task(_audit_log, request.question, request.session_id)
+    # RAG retrieval
+    context = retrieve(
+        question=request.question,
+        schema_filter=request.schema_filter,
+        top_k=8,
+    )
     latency_ms = int((time.perf_counter() - start) * 1000)
     return ChatResponse(
         trace_id=str(uuid.uuid4()),
@@ -61,7 +68,7 @@ async def chat_endpoint(
         question=request.question,
         sql=_STUB_SQL,
         explanation=_STUB_EXPLANATION,
-        retrieved_context=[],
+        retrieved_context=context,
         join_suggestions=[],
         confidence=0.0,
         latency_ms=latency_ms,
