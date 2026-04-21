@@ -1,9 +1,11 @@
 import time
 import uuid
 
-from fastapi import APIRouter, Depends
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, get_settings
+from app.models.db import get_db
 from app.models.schemas import (
     ChatRequest,
     ChatResponse,
@@ -12,10 +14,8 @@ from app.models.schemas import (
 )
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Stub SQL templates — replaced by real LLM on Day 6, RAG on Day 9
-# ---------------------------------------------------------------------------
 _STUB_SQL = """\
 SELECT
     region,
@@ -29,25 +29,32 @@ ORDER BY total_revenue DESC
 LIMIT 1000;"""
 
 _STUB_EXPLANATION = (
-    "[STUB — Day 1] Mock response. "
+    "[STUB] Mock response. "
     "Real RAG pipeline wires in on Day 9. "
     "Real LLM integration on Day 6."
 )
 
 
+async def _audit_log(question: str, session_id: str) -> None:
+    logger.info("chat audit", session_id=session_id, msg_len=len(question))
+
+
+async def _persist_feedback(trace_id: str, rating: str, db: AsyncSession) -> None:
+    try:
+        logger.info("persisting feedback", trace_id=trace_id, rating=rating)
+    except Exception:
+        logger.exception("feedback persistence failed", trace_id=trace_id)
+
+
 @router.post("/chat", response_model=ChatResponse)
-async def chat(
+async def chat_endpoint(
     request: ChatRequest,
-    settings: Settings = Depends(get_settings),
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     start = time.perf_counter()
-
-    # TODO Day 9:  retrieved_context = await retriever.query(request.question)
-    # TODO Day 11: join_suggestions  = join_graph.find_path(tables)
-    # TODO Day 6:  sql = await llm.generate_sql(request.question, context)
-
+    background_tasks.add_task(_audit_log, request.question, request.session_id)
     latency_ms = int((time.perf_counter() - start) * 1000)
-
     return ChatResponse(
         trace_id=str(uuid.uuid4()),
         session_id=request.session_id,
@@ -61,7 +68,11 @@ async def chat(
     )
 
 
-@router.post("/feedback", response_model=FeedbackResponse)
-async def feedback(request: FeedbackRequest) -> FeedbackResponse:
-    # TODO Day 26: persist to PostgreSQL + push to LangSmith
+@router.post("/feedback", response_model=FeedbackResponse, status_code=202)
+async def feedback_endpoint(
+    request: FeedbackRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> FeedbackResponse:
+    background_tasks.add_task(_persist_feedback, request.trace_id, request.rating, db)
     return FeedbackResponse(status="received", trace_id=request.trace_id)

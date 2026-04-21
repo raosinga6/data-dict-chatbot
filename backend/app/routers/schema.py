@@ -4,9 +4,49 @@ from sqlalchemy import text
 
 from app.models.schemas import TableInfo, ColumnInfo
 from app.models.db import get_db
+from typing import Literal
+from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter()
 
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    session_id: str = Field(..., min_length=1, max_length=64)
+
+    @field_validator("message")
+    @classmethod
+    def strip_and_validate(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("message cannot be whitespace only")
+        return v
+class ChatResponse(BaseModel):
+    message: str
+    session_id: str
+    sources: list[str] = []
+    sql_snippet: str | None = None
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    message_id: str
+    rating: Literal[1, -1]      # thumbs up / thumbs down
+class TableInfo(BaseModel):
+    table_name: str
+    schema_name: str
+    description: str | None
+    
+class ColumnInfo(BaseModel):
+    column_name: str
+    table_name: str
+    data_type: str
+    description: str | None
+    is_nullable: bool
+
+class JoinSuggestion(BaseModel):
+    left_table: str
+    right_table: str
+    join_key: str
+    join_type: str
 
 @router.get("/tables", response_model=list[TableInfo])
 async def get_tables(

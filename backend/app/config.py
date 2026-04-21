@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from pathlib import Path
 
@@ -12,18 +12,20 @@ class Settings(BaseSettings):
     app_name: str = "Data Dictionary Chatbot"
     environment: str = "development"
     log_level: str = "INFO"
-
+ 
     # Database
     database_url: str
 
     # ChromaDB
+    chroma_url: str = "http://chromadb:8000"
     chroma_host: str = "chromadb"
     chroma_port: int = 8000
     chroma_collection: str = "data_dictionary"
 
     # Redis
-    redis_url: str = "redis://redis:6379"
+    redis_url: str = "redis://redis:6379/0"
     session_ttl_seconds: int = 1800
+    allowed_origins: list[str] = ["http://localhost:8501"]
 
     # LLM
     openai_api_key: str = ""
