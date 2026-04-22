@@ -56,18 +56,19 @@ steps:
     args:
       - '-c'
       - |
-        # Fetch real DB URL from Secret Manager
-        export DATABASE_URL=$$(gcloud secrets versions access latest --secret=$_DB_SECRET)
+          export DATABASE_URL=$$(gcloud secrets versions access latest --secret=$_DB_SECRET)
 
-        # Start Cloud SQL Auth Proxy in background
-        wget -q https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.1/cloud-sql-proxy.linux.amd64 \
-          -O /cloud-sql-proxy && chmod +x /cloud-sql-proxy
-        /cloud-sql-proxy $${CLOUD_SQL_INSTANCE} --port=5432 &
-        sleep 3
+          # download cloud sql proxy using curl
+          curl -o /cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.8.1/cloud-sql-proxy.linux.amd64
+          chmod +x /cloud-sql-proxy
+          /cloud-sql-proxy $${CLOUD_SQL_INSTANCE} --port=5432 &
+          sleep 5
 
-        # Run migrations
-        cd backend
-        pip install -r requirements.txt -q
-        alembic upgrade head
+          # install only what alembic needs
+          pip install -q alembic sqlalchemy asyncpg psycopg2-binary
+
+          cd backend
+          alembic upgrade head
     env:
       - ENVIRONMENT=production
+      - CLOUD_SQL_INSTANCE=data-dict-rag:asia-southeast1:data-dict-rag
