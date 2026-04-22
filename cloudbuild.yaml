@@ -10,8 +10,6 @@ options:
 timeout: 600s
 
 steps:
-
-  # 1. Unit tests — SQLite is fine here, no real DB needed
   - name: python:3.12-slim
     id: run-unit-tests
     entrypoint: bash
