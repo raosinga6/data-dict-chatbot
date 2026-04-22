@@ -19,7 +19,7 @@ services:
       retries: 5
 
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.0.0
     container_name: dd_chromadb
     volumes:
       - chroma_data:/chroma/chroma
@@ -64,6 +64,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - huggingface_cache:/root/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,3 +94,4 @@ services:
 volumes:
   postgres_data:
   chroma_data:
+  huggingface_cache:

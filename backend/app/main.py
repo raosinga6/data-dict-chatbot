@@ -92,7 +92,7 @@ async def health_check():
     try:
         import httpx
         async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{settings.chroma_url}/api/v1/heartbeat")
+            resp = await client.get(f"{settings.chroma_url}/api/v2/heartbeat")
             checks["chromadb"] = "ok" if resp.status_code == 200 else f"status: {resp.status_code}"
     except Exception as e:
         checks["chromadb"] = f"error: {e}"

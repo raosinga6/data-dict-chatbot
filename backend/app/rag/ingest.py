@@ -1,59 +1,48 @@
 import asyncio
 import hashlib
+from openai import OpenAI
+import chromadb
 from app.config import get_settings
 from app.models.db import get_session_factory
 from sqlalchemy import text
-import chromadb
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+from sentence_transformers import SentenceTransformer
+_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+def embed(texts: list[str]) -> list[list[float]]:
+    return _model.encode(texts, show_progress_bar=False).tolist()
 
 settings = get_settings()
+openai_client = OpenAI(api_key=settings.openai_api_key)
 
 def get_chroma_collection():
-    client = chromadb.HttpClient(host="localhost", port=8000)
-    ef = OpenAIEmbeddingFunction(
-        api_key=settings.openai_api_key,
-        model_name="text-embedding-3-small",
-    )
+    client = chromadb.HttpClient(host="localhost", port=8001)
+    # no embedding function — we embed manually
     return client.get_or_create_collection(
         name="data_dictionary",
-        embedding_function=ef,
         metadata={"hnsw:space": "cosine"},
     )
-
-def build_document(row: dict) -> str:
-    """
-    Combine metadata into a single string for embedding.
-    Richer text = better retrieval.
-    """
-    parts = [
-        f"Table: {row['schema_name']}.{row['table_name']}",
-        f"Column: {row['column_name']}" if row.get('column_name') else "",
-        f"Type: {row.get('data_type', '')}",
-        f"Description: {row.get('description', '')}",
-        f"Primary key: {row.get('is_primary_key', False)}",
-        f"Foreign key: {row.get('is_foreign_key', False)}",
-        f"References: {row.get('references_table', '')}.{row.get('references_column', '')}"
-        if row.get('references_table') else "",
-    ]
-    return " | ".join(p for p in parts if p)
-
+'''
+def embed(texts: list[str]) -> list[list[float]]:
+    response = openai_client.embeddings.create(
+        input=texts,
+        model="text-embedding-3-small",
+    )
+    return [r.embedding for r in response.data]
+'''
 async def ingest():
     factory = get_session_factory()
     collection = get_chroma_collection()
 
     async with factory() as db:
-        # Tables
         tables = (await db.execute(text(
             "SELECT schema_name, table_name, description FROM dd_tables"
         ))).mappings().all()
 
-        # Columns with join info
         columns = (await db.execute(text("""
-            SELECT
-                c.schema_name, c.table_name, c.column_name,
-                c.data_type, c.description,
-                c.is_primary_key, c.is_foreign_key,
-                c.references_table, c.references_column
+            SELECT c.schema_name, c.table_name, c.column_name,
+                   c.data_type, c.description,
+                   c.is_primary_key, c.is_foreign_key,
+                   c.references_table, c.references_column
             FROM dd_columns c
         """))).mappings().all()
 
@@ -86,17 +75,34 @@ async def ingest():
             "column_name": row["column_name"],
         })
 
-    # Upsert in batches of 100
+    # embed + upsert in batches of 100
     batch = 100
     for i in range(0, len(documents), batch):
+        batch_docs = documents[i:i+batch]
+        batch_ids = ids[i:i+batch]
+        batch_meta = metadatas[i:i+batch]
+        embeddings = embed(batch_docs)
         collection.upsert(
-            documents=documents[i:i+batch],
-            ids=ids[i:i+batch],
-            metadatas=metadatas[i:i+batch],
+            documents=batch_docs,
+            embeddings=embeddings,
+            ids=batch_ids,
+            metadatas=batch_meta,
         )
         print(f"Upserted {min(i+batch, len(documents))}/{len(documents)}")
 
     print(f"Done. {len(documents)} documents in ChromaDB.")
 
+def build_document(row: dict) -> str:
+    parts = [
+        f"Table: {row['schema_name']}.{row['table_name']}",
+        f"Column: {row['column_name']}" if row.get('column_name') else "",
+        f"Type: {row.get('data_type', '')}",
+        f"Description: {row.get('description', '')}",
+        f"Primary key: {row.get('is_primary_key', False)}",
+        f"Foreign key: {row.get('is_foreign_key', False)}",
+        f"References: {row.get('references_table', '')}.{row.get('references_column', '')}"
+        if row.get('references_table') else "",
+    ]
+    return " | ".join(p for p in parts if p)
 if __name__ == "__main__":
     asyncio.run(ingest())
