@@ -3,15 +3,27 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
-
+from unittest.mock import MagicMock, patch
 from app.main import app
 from app.models.db import get_db
 from app.config import get_settings
+from unittest.mock import MagicMock, patch
+import os
 
-@pytest.fixture(scope="session")
+#@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(autouse=True)
+def mock_chromadb():
+    """Always mock ChromaDB — it's a Docker service, not available in CI or unit tests."""
+    with patch("app.rag.retriever.get_collection") as mock:
+        collection = MagicMock()
+        collection.query.return_value = {
+            "metadatas": [[]],
+            "distances": [[]],
+        }
+        mock.return_value = collection
+        yield
 def anyio_backend():
     return "asyncio"
-
 
 @pytest_asyncio.fixture
 async def client():

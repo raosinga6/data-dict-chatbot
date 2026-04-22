@@ -34,3 +34,9 @@ async def test_get_joins_returns_list(client):
     response = await client.get("/api/v1/joins?table_a=orders&table_b=customers")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+pytestmark = pytest.mark.skipif(
+    not __import__("os").getenv("DATABASE_URL"),
+    reason="No DATABASE_URL — skipping DB tests in CI"
+)

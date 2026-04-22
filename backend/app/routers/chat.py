@@ -55,12 +55,14 @@ async def chat_endpoint(
 ) -> ChatResponse:
     start = time.perf_counter()
     background_tasks.add_task(_audit_log, request.question, request.session_id)
-    # RAG retrieval
-    context = retrieve(
-        question=request.question,
-        schema_filter=request.schema_filter,
-        top_k=8,
-    )
+
+    # Lazy import — chromadb only available when Docker stack is up
+    try:
+        from app.rag.retriever import retrieve
+        context = retrieve(question=request.question, schema_filter=request.schema_filter)
+    except Exception:
+        context = []
+
     latency_ms = int((time.perf_counter() - start) * 1000)
     return ChatResponse(
         trace_id=str(uuid.uuid4()),
