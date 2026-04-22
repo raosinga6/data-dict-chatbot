@@ -10,32 +10,39 @@ def embed(texts: list[str]) -> list[list[float]]:
     return _model.encode(texts, show_progress_bar=False).tolist()
 
 settings = get_settings()
-openai_client = OpenAI(api_key=settings.openai_api_key)
+_model = None
 _collection = None
+def get_model():
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 def get_collection():
     global _collection
     if _collection is None:
-        client = chromadb.HttpClient(host="localhost", port=8001)
-        _collection = client.get_or_create_collection(
-            name="data_dictionary",
-            metadata={"hnsw:space": "cosine"},
-        )
+        try:
+            import chromadb
+            client = chromadb.HttpClient(host="localhost", port=8001)
+            _collection = client.get_or_create_collection(
+                name="data_dictionary",
+                metadata={"hnsw:space": "cosine"},
+            )
+        except Exception:
+            return None
     return _collection
 
 def retrieve(question: str, schema_filter: str | None = None, top_k: int = 8) -> list[RetrievedContext]:
     try:
-        '''
-        embedding = openai_client.embeddings.create(
-            input=[question],
-            model="text-embedding-3-small",
-        ).data[0].embedding
-        '''
+        collection = get_collection()
+        if collection is None:
+            return []
 
-        embedding = _model.encode([question]).tolist()[0]
-
+        embedding = get_model().encode([question]).tolist()[0]
         where = {"schema_name": schema_filter.lower()} if schema_filter else None
-        results = get_collection().query(
+
+        results = collection.query(
             query_embeddings=[embedding],
             n_results=top_k,
             where=where,
